@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Kryzys",
+    "slug": "kryzys",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
