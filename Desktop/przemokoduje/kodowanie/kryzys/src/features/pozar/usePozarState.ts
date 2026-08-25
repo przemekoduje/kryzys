@@ -12,7 +12,7 @@ export function usePozarState() {
   const [isTimerFinished, setIsTimerFinished] = useState(false);
   
   const traceIdRef = useRef<string>('');
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIntervalRef = useRef<any>(null);
 
   if (!traceIdRef.current) {
     traceIdRef.current = Logger.generateTraceId();

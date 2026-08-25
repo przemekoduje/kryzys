@@ -4,6 +4,7 @@ import { useNavigationState } from './src/features/navigation/useNavigationState
 import { HomeScreen } from './src/features/home/HomeScreen';
 import { PrzejazdScreen } from './src/features/przejazd/PrzejazdScreen';
 import { PozarScreen } from './src/features/pozar/PozarScreen';
+import { UdarScreen } from './src/features/udar/UdarScreen';
 
 export default function App() {
   const { currentScreen, navigateTo, traceId } = useNavigationState();
@@ -16,6 +17,8 @@ export default function App() {
         return <PrzejazdScreen />;
       case 'pozar':
         return <PozarScreen />;
+      case 'udar':
+        return <UdarScreen />;
       default:
         return <HomeScreen navigateTo={navigateTo} navigationTraceId={traceId} />;
     }

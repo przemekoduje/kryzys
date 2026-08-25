@@ -27,10 +27,10 @@ const CATEGORIES: CategoryTile[] = [
     code: '02'
   },
   {
-    id: 'pierwsza_pomoc',
+    id: 'udar',
     title: 'PIERWSZA POMOC',
     subtitle: 'Resuscytacja krążeniowo-oddechowa i urazy.',
-    enabled: false,
+    enabled: true,
     code: '03'
   }
 ];

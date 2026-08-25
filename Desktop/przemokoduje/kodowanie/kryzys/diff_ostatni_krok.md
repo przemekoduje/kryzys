@@ -1,196 +1,184 @@
-# Raport Code Review: KRYZYS-005-POZAR-KUCHNA
+# Raport: KRYZYS-006-UDAR-FAST
 
-Wdrożenie modułu "Pożar tłuszczu na patelni w kuchni" (wraz z 15-minutowym timerem bezpieczeństwa, obsługą stanu kroków, integracją z asystą głosową oraz odblokowaniem ekranu w menu głównym) zostało zakończone sukcesem. Kompilator TypeScript (`npx tsc --noEmit`) nie wykazał żadnych błędów.
-
-Poniżej znajdują się nowo wdrożone oraz zmodyfikowane moduły:
+Pomyślnie zaimplementowano moduł testu FAST dla podejrzenia udaru mózgu. Poniżej znajduje się podsumowanie zmian i nowo wdrożonych plików.
 
 ---
 
-## 1. Typowanie i algorytm: [types.ts](file:///c:/Users/Admin/Desktop/przemokoduje/kodowanie/kryzys/src/features/pozar/types.ts) oraz [data.ts](file:///c:/Users/Admin/Desktop/przemokoduje/kodowanie/kryzys/src/features/pozar/data.ts)
+## 1. Struktura i typowanie testu FAST
+
+### [NEW] `src/features/udar/types.ts`
 ```typescript
-// types.ts
-export interface PozarStep {
-  id: 'warning' | 'cutoff' | 'smother' | 'timer';
+export interface UdarStep {
+  id: 'face' | 'arms' | 'speech' | 'result';
   title: string;
+  question?: string;
   description: string;
-  colorCode: string;
-  iconName: string;
+  instruction?: string;
 }
 
-// data.ts
-import { PozarStep } from './types';
+export interface UdarAnswers {
+  face: boolean | null;
+  arms: boolean | null;
+  speech: boolean | null;
+}
+```
 
-export const POZAR_STEPS: PozarStep[] = [
+### [NEW] `src/features/udar/data.ts`
+```typescript
+import { UdarStep } from './types';
+
+export const UDAR_STEPS: UdarStep[] = [
   {
-    id: 'warning',
-    title: '1. Ostrzeżenie i zakaz',
-    description: 'BEZWZGLĘDNY ZAKAZ GASZENIA WODĄ! Polanie rozgrzanego tłuszczu wodą spowoduje natychmiastowy wybuch pary i rozprzestrzenienie ognia na całe pomieszczenie.',
-    colorCode: '#FF3B30',
-    iconName: 'warning'
+    id: 'face',
+    title: 'F - Face (Twarz)',
+    question: 'Czy opada kącik ust?',
+    description: 'Poproś osobę o uśmiechnięcie się lub pokazanie zębów. Zwróć uwagę, czy uśmiech jest symetryczny i czy jeden kącik ust nie opada.'
   },
   {
-    id: 'cutoff',
-    title: '2. Odcięcie energii',
-    description: 'Wyłącz źródło zasilania płyty grzewczej (palnik gazowy, indukcję lub bezpiecznik), aby zatrzymać dalsze dostarczanie ciepła do płonącego tłuszczu.',
-    colorCode: '#FFCC00',
-    iconName: 'power'
+    id: 'arms',
+    title: 'A - Arms (Ramiona)',
+    question: 'Czy jedno ramię opada przy podnoszeniu rąk?',
+    description: 'Poproś osobę o zamknięcie oczu i wyciągnięcie obu rąk przed siebie wnętrzem dłoni do góry na 10 sekund. Zwróć uwagę, czy jedna ręka opada lub opuszcza się.'
   },
   {
-    id: 'smother',
-    title: '3. Tłumienie pokrywką',
-    description: 'Nasunąć ostrożnie metalową pokrywkę lub wilgotny, dobrze wyciśnięty ręcznik/koc gaśniczy na patelnię, odcinając dopływ tlenu do ognia. Nie rzucaj nim, aby nie rozchlapać tłuszczu.',
-    colorCode: '#FFCC00',
-    iconName: 'cover'
+    id: 'speech',
+    title: 'S - Speech (Mowa)',
+    question: 'Czy mowa jest bełkotliwa lub niezrozumiała?',
+    description: 'Poproś osobę o powtórzenie prostego zdania (np. "Dzisiaj jest ładna pogoda"). Zwróć uwagę na bełkotanie, niewyraźną mowę lub trudności ze zrozumieniem polecenia.'
   },
   {
-    id: 'timer',
-    title: '4. Czas na ostygnięcie',
-    description: 'NIE ZDEJMUJ POKRYWKI przez minimum 15 minut! Przedwczesny dopływ tlenu spowoduje ponowny samozapłon gorących oparów oleju. Uruchom odliczanie.',
-    colorCode: '#34C759',
-    iconName: 'timer'
+    id: 'result',
+    title: 'T - Time / SOS',
+    description: 'Czas to mózg! Każda sekunda opóźnienia zwiększa ryzyko trwałego uszkodzenia mózgu. Zareaguj natychmiast.'
   }
 ];
 ```
 
 ---
 
-## 2. Stan z timerem: [usePozarState.ts](file:///c:/Users/Admin/Desktop/przemokoduje/kodowanie/kryzys/src/features/pozar/usePozarState.ts)
+## 2. Stan z logiką szybkiego przekierowania
+
+### [NEW] `src/features/udar/useUdarState.ts`
 ```typescript
 import { useState, useEffect, useRef } from 'react';
-import { POZAR_STEPS } from './data';
-import { PozarStep } from './types';
+import { UDAR_STEPS } from './data';
+import { UdarAnswers } from './types';
 import { Logger } from '../../core/logger';
 
-const TIMER_SECONDS = 900;
-
-export function usePozarState() {
+export function useUdarState() {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [secondsLeft, setSecondsLeft] = useState(TIMER_SECONDS);
-  const [isTimerActive, setIsTimerActive] = useState(false);
-  const [isTimerFinished, setIsTimerFinished] = useState(false);
+  const [answers, setAnswers] = useState<UdarAnswers>({
+    face: null,
+    arms: null,
+    speech: null
+  });
   
   const traceIdRef = useRef<string>('');
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
+  
   if (!traceIdRef.current) {
     traceIdRef.current = Logger.generateTraceId();
   }
-
+  
   const traceId = traceIdRef.current;
-  const currentStep = POZAR_STEPS[currentIndex];
-
+  const currentStep = UDAR_STEPS[currentIndex];
+  
   useEffect(() => {
-    Logger.info(traceId, 'Kitchen fire procedure screen initialized', {
-      totalSteps: POZAR_STEPS.length,
-      initialStep: currentStep.id
-    });
-
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        Logger.info(traceId, 'Timer interval cleaned up on screen unmount');
-      }
-    };
+    Logger.info(traceId, 'FAST stroke test screen initialized');
   }, []);
 
-  useEffect(() => {
-    if (isTimerActive && secondsLeft > 0) {
-      timerIntervalRef.current = setInterval(() => {
-        setSecondsLeft((prev) => {
-          if (prev <= 1) {
-            setIsTimerActive(false);
-            setIsTimerFinished(true);
-            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-            Logger.info(traceId, '15-minute kitchen fire safety timer finished');
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
+  const hasSymptoms = answers.face === true || answers.arms === true || answers.speech === true;
 
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
+  const handleAnswer = (answer: boolean) => {
+    const stepId = currentStep.id;
+    if (stepId === 'result') return;
+
+    const newAnswers = { ...answers, [stepId]: answer };
+    setAnswers(newAnswers);
+    
+    Logger.info(traceId, `User answered FAST test step: ${stepId}`, {
+      step: stepId,
+      answer,
+      currentAnswers: newAnswers
+    });
+
+    if (answer === true) {
+      setCurrentIndex(3);
+      Logger.info(traceId, 'FAST stroke symptom detected. Immediate redirect to SOS/Result screen.');
+    } else {
+      if (currentIndex < 2) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        setCurrentIndex(3);
       }
-    };
-  }, [isTimerActive, secondsLeft]);
-
-  useEffect(() => {
-    if (currentStep.id === 'timer' && !isTimerActive && !isTimerFinished && secondsLeft === TIMER_SECONDS) {
-      setIsTimerActive(true);
-      Logger.info(traceId, '15-minute kitchen fire safety timer started');
-    }
-  }, [currentIndex]);
-
-  const nextStep = () => {
-    if (currentIndex < POZAR_STEPS.length - 1) {
-      const nextIndex = currentIndex + 1;
-      const nextStepData = POZAR_STEPS[nextIndex];
-      setCurrentIndex(nextIndex);
     }
   };
 
-  const prevStep = () => {
-    if (currentIndex > 0) {
-      const prevIndex = currentIndex - 1;
-      const prevStepData = POZAR_STEPS[prevIndex];
-      setCurrentIndex(prevIndex);
-    }
-  };
-
-  const resetTimer = () => {
-    setIsTimerActive(false);
-    setIsTimerFinished(false);
-    setSecondsLeft(TIMER_SECONDS);
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-    }
-    Logger.info(traceId, 'Safety timer manually reset');
-  };
-
-  const formatTime = (): string => {
-    const mins = Math.floor(secondsLeft / 60);
-    const secs = secondsLeft % 60;
-    const minsStr = mins < 10 ? `0${mins}` : `${mins}`;
-    const secsStr = secs < 10 ? `0${secs}` : `${secs}`;
-    return `${minsStr}:${secsStr}`;
+  const restartTest = () => {
+    setAnswers({
+      face: null,
+      arms: null,
+      speech: null
+    });
+    setCurrentIndex(0);
+    Logger.info(traceId, 'FAST stroke test restarted');
   };
 
   return {
     currentStep,
     currentIndex,
-    steps: POZAR_STEPS,
-    nextStep,
-    prevStep,
-    traceId,
-    isFirst: currentIndex === 0,
-    isLast: currentIndex === POZAR_STEPS.length - 1,
-    formattedTime: formatTime(),
-    isTimerFinished,
-    isTimerActive,
-    resetTimer
+    steps: UDAR_STEPS,
+    answers,
+    hasSymptoms,
+    handleAnswer,
+    restartTest,
+    traceId
   };
 }
 ```
 
 ---
 
-## 3. Ekran UI z zegarem: [PozarScreen.tsx](file:///c:/Users/Admin/Desktop/przemokoduje/kodowanie/kryzys/src/features/pozar/PozarScreen.tsx)
-*(Zaprojektowany z wielkim wyświetlaczem czasu 54px typu tabular-nums, dedykowanym przyciskiem resetu i stanami schładzania patelni w tle).*
+## 3. Zmiany w istniejących plikach (Nawigacja i HomeScreen)
+
+### [MODIFY] `src/features/navigation/useNavigationState.ts`
+```diff
+-export type ScreenType = 'home' | 'przejazd' | 'pozar';
++export type ScreenType = 'home' | 'przejazd' | 'pozar' | 'udar';
+```
+
+### [MODIFY] `App.tsx`
+```diff
+ import { PrzejazdScreen } from './src/features/przejazd/PrzejazdScreen';
+ import { PozarScreen } from './src/features/pozar/PozarScreen';
++import { UdarScreen } from './src/features/udar/UdarScreen';
+ 
+ export default function App() {
+@@ -17,4 +18,6 @@ export default function App() {
+       case 'pozar':
+         return <PozarScreen />;
++      case 'udar':
++        return <UdarScreen />;
+       default:
+```
+
+### [MODIFY] `src/features/home/HomeScreen.tsx`
+```diff
+   {
+-    id: 'pierwsza_pomoc',
++    id: 'udar',
+     title: 'PIERWSZA POMOC',
+     subtitle: 'Resuscytacja krążeniowo-oddechowa i urazy.',
+-    enabled: false,
++    enabled: true,
+     code: '03'
+   }
+```
 
 ---
 
-## 4. Zaktualizowane menu główne: [HomeScreen.tsx](file:///c:/Users/Admin/Desktop/przemokoduje/kodowanie/kryzys/src/features/home/HomeScreen.tsx)
-```diff
-@@ -17,7 +17,7 @@
-   {
-     id: 'pozar',
-     title: 'POŻARY',
-     subtitle: 'Procedura ewakuacji i gaszenia w zarzewiu.',
--    enabled: false,
-+    enabled: true,
-     code: '02'
-   },
+## 4. Weryfikacja statyczna
+Uruchomiono:
+```bash
+npx tsc --noEmit
 ```
-*(Przed modyfikacją utworzono poprawnie plik kopii zapasowej [HomeScreen.tsx.bak](file:///c:/Users/Admin/Desktop/przemokoduje/kodowanie/kryzys/src/features/home/HomeScreen.tsx.bak)).*
+Status kompilacji: **Sukces** (0 błędów).

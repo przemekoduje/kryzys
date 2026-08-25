@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Logger } from '../../core/logger';
 
-export type ScreenType = 'home' | 'przejazd' | 'pozar';
+export type ScreenType = 'home' | 'przejazd' | 'pozar' | 'udar';
 
 export function useNavigationState() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
